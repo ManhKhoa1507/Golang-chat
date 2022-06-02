@@ -76,6 +76,7 @@ func (room *Room) broadcastToClientsInRoom(message []byte) {
 	}
 }
 
+// Get room name
 func (room *Room) GetName() string {
 	return room.name
 }
