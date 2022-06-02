@@ -7,9 +7,14 @@ import (
 
 // Define Action
 const (
+	// Define Server action
 	SendMessageAction = "send-message"
 	JoinRoomAction    = "join-room"
 	LeaveRoomAction   = "leave-room"
+
+	// Define user action
+	UserJoinedAction = "user-join"
+	UserLeftAction   = "user-left"
 )
 
 // Define message json
