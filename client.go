@@ -15,11 +15,13 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 4096,
 }
 
+// define new line and space character
 var (
 	newline = []byte{'\n'}
 	space   = []byte{' '}
 )
 
+// Declare WsServer struct
 type WsServer struct {
 	clients    map[*Client]bool
 	register   chan *Client
@@ -34,6 +36,7 @@ type Client struct {
 	send     chan []byte
 }
 
+// Define some variables
 const (
 	// Max wait time when writing message to peer
 	writeWait = 10 * time.Second
@@ -48,7 +51,7 @@ const (
 	maxMessageSize = 10000
 )
 
-// NewWebsocketServer create new WsServer type
+// Create new WsServer type
 func NewWebsocketServer() *WsServer {
 	return &WsServer{
 		clients:    make(map[*Client]bool),
@@ -58,24 +61,28 @@ func NewWebsocketServer() *WsServer {
 	}
 }
 
+// Run server
 func (server *WsServer) Run() {
-	// Create infinity loop to listen
+	// Create endless loop to listen
 	for {
 		select {
+
+		// Register client
 		case client := <-server.register:
-			// Register client
 			server.registerClient(client)
 
+		// Unregister client
 		case client := <-server.unregister:
-			// Unregister client
 			server.unregisterClient(client)
+
+		// Broadcast message
 		case message := <-server.broadcast:
 			server.broadcastToClients(message)
 		}
 	}
 }
 
-// Function ro register client
+// Function ro register client -> enable flag true to server.clients[client]
 func (server *WsServer) registerClient(client *Client) {
 	server.clients[client] = true
 }
@@ -87,25 +94,28 @@ func (server *WsServer) unregisterClient(client *Client) {
 	}
 }
 
+// return new websocket connection
 func newClient(conn *websocket.Conn, wsServer *WsServer) *Client {
-	// return new websocket connection
 	return &Client{
 		conn:     conn,
 		wsServer: wsServer,
 	}
 }
 
+// Read message and send over the Websocket connection, make endless loop untils client is disconnected
 func (client *Client) readPump() {
 	defer func() {
 		client.disconnect()
 	}()
 
+	// Check for connection
 	client.conn.SetReadLimit(maxMessageSize)
 	client.conn.SetReadDeadline(time.Now().Add(pongWait))
 	client.conn.SetPongHandler(func(string) error { client.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
 
 	// Start endless loop to waiting message
 	for {
+		// Read message
 		_, jsonMessage, err := client.conn.ReadMessage()
 
 		// Error Handle
@@ -115,23 +125,36 @@ func (client *Client) readPump() {
 			}
 			break
 		}
+
+		// add jsonMessage to broadcast
 		client.wsServer.broadcast <- jsonMessage
 	}
 }
 
+// Boardcast message to Clients
 func (server *WsServer) broadcastToClients(message []byte) {
+
+	// Send message to all client in server.clients
 	for client := range server.clients {
 		client.send <- message
 	}
 }
 
+// Disconnect client
 func (client *Client) disconnect() {
+
+	// add client to unregister and close connection
 	client.wsServer.unregister <- client
 	close(client.send)
 	client.conn.Close()
 }
 
+// Goroutine handles sending messages to the connected client
+// Run endless loop waiting for new message in client.send channel
+// When received new message -> writes to clients
+// If multiple message, combined in one write
 func (client *Client) writePump() {
+	// Use NewTicker to viewing time
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
@@ -144,11 +167,15 @@ func (client *Client) writePump() {
 
 		case message, ok := <-client.send:
 			client.conn.SetWriteDeadline(time.Now().Add(pongWait))
+
+			// If WebSocket closed the channel
 			if !ok {
 				client.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 
+			// NextWriter return a writer for next message to send
+			// return writer w
 			w, err := client.conn.NextWriter(websocket.TextMessage)
 
 			// Handle the error
@@ -157,6 +184,7 @@ func (client *Client) writePump() {
 				return
 			}
 
+			// Writer write message
 			w.Write(message)
 			n := len(client.send)
 			for i := 0; i < n; i++ {
@@ -164,11 +192,14 @@ func (client *Client) writePump() {
 				w.Write(<-client.send)
 			}
 
+			// Handle the error when writer closed
 			if err := w.Close(); err != nil {
 				return
 			}
 
+		// Handle connection
 		case <-ticker.C:
+			client.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := client.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
@@ -194,6 +225,6 @@ func Serverws(wsServer *WsServer, w http.ResponseWriter, r *http.Request) {
 
 	wsServer.register <- client
 
-	fmt.Println("New client, join the server")
-	fmt.Println(client)
+	// fmt.Println("New client, join the server")
+	// fmt.Println(client)
 }

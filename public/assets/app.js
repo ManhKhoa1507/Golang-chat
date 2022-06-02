@@ -6,7 +6,7 @@ var app = new Vue({
     messages: [],
     newMessage: ""
   },
-  
+
   mounted: function() {
     this.connectToWebsocket();
   },
@@ -41,6 +41,5 @@ var app = new Vue({
         this.newMessage = "";
       }
     }
-
   }
 })
