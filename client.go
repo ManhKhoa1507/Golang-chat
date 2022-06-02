@@ -21,19 +21,13 @@ var (
 	space   = []byte{' '}
 )
 
-// Declare WsServer struct
-type WsServer struct {
-	clients    map[*Client]bool
-	register   chan *Client
-	unregister chan *Client
-	broadcast  chan []byte
-}
-
 // represents the websocket client at server
 type Client struct {
 	conn     *websocket.Conn
 	wsServer *WsServer
 	send     chan []byte
+	rooms    map[*Room]bool
+	Name     string `json:"name"`
 }
 
 // Define some variables
@@ -50,16 +44,6 @@ const (
 	// Maximum message size allowed from peer.
 	maxMessageSize = 10000
 )
-
-// Create new WsServer type
-func NewWebsocketServer() *WsServer {
-	return &WsServer{
-		clients:    make(map[*Client]bool),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		broadcast:  make(chan []byte),
-	}
-}
 
 // Run server
 func (server *WsServer) Run() {
@@ -82,6 +66,11 @@ func (server *WsServer) Run() {
 	}
 }
 
+// Get client name
+func (client *Client) getName() string {
+	return client.Name
+}
+
 // Function ro register client -> enable flag true to server.clients[client]
 func (server *WsServer) registerClient(client *Client) {
 	server.clients[client] = true
@@ -95,10 +84,12 @@ func (server *WsServer) unregisterClient(client *Client) {
 }
 
 // return new websocket connection
-func newClient(conn *websocket.Conn, wsServer *WsServer) *Client {
+func newClient(conn *websocket.Conn, wsServer *WsServer, name string) *Client {
 	return &Client{
 		conn:     conn,
 		wsServer: wsServer,
+		rooms:    make(map[*Room]bool),
+		Name:     name,
 	}
 }
 
@@ -127,7 +118,7 @@ func (client *Client) readPump() {
 		}
 
 		// add jsonMessage to broadcast
-		client.wsServer.broadcast <- jsonMessage
+		client.handleNewMessage(jsonMessage)
 	}
 }
 
@@ -145,6 +136,12 @@ func (client *Client) disconnect() {
 
 	// add client to unregister and close connection
 	client.wsServer.unregister <- client
+
+	// Unregister client from room
+	for room := range client.rooms {
+		room.unregister <- client
+	}
+
 	close(client.send)
 	client.conn.Close()
 }
@@ -216,9 +213,13 @@ func Serverws(wsServer *WsServer, w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err)
 		return
 	}
-
+	// Get name from URL query
+	name, ok := r.URL.Query()["name"]
+	if !ok || len(name[0]) < 1 {
+		print("Missing name")
+	}
 	// Create new client and print result
-	client := newClient(conn, wsServer)
+	client := newClient(conn, wsServer, name[0])
 
 	go client.writePump()
 	go client.readPump()

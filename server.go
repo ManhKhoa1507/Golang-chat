@@ -6,6 +6,26 @@ import (
 	"net/http"
 )
 
+// Declare WsServer struct
+type WsServer struct {
+	clients    map[*Client]bool
+	register   chan *Client
+	unregister chan *Client
+	broadcast  chan []byte
+	rooms      map[*Room]bool
+}
+
+// Create new WsServer type
+func NewWebsocketServer() *WsServer {
+	return &WsServer{
+		clients:    make(map[*Client]bool),
+		register:   make(chan *Client),
+		unregister: make(chan *Client),
+		broadcast:  make(chan []byte),
+		rooms:      make(map[*Room]bool),
+	}
+}
+
 var addr = flag.String("localhost", ":8080", "http server address")
 
 func main() {
