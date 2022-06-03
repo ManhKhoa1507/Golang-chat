@@ -29,12 +29,13 @@ var (
 
 // represents the websocket client at server
 type Client struct {
+	// The actual websocket connection.
 	conn     *websocket.Conn
 	wsServer *WsServer
 	send     chan []byte
-	rooms    map[*Room]bool
-	Name     string    `json:"name"`
 	ID       uuid.UUID `json:"id"`
+	Name     string    `json:"name"`
+	rooms    map[*Room]bool
 }
 
 // Define some variables
@@ -52,7 +53,7 @@ const (
 	maxMessageSize = 10000
 )
 
-// Run server
+// Run client
 func (server *WsServer) Run() {
 	// Create endless loop to listen
 	for {
@@ -74,6 +75,19 @@ func (server *WsServer) Run() {
 }
 
 // Client interactive
+// return new websocket connection
+func newClient(conn *websocket.Conn, wsServer *WsServer, name string) *Client {
+	fmt.Println("Client " + name + " joined")
+	return &Client{
+		ID:       uuid.New(),
+		Name:     name,
+		conn:     conn,
+		wsServer: wsServer,
+		send:     make(chan []byte, 256),
+		rooms:    make(map[*Room]bool),
+	}
+}
+
 // Function ro register client -> enable flag true to server.clients[client]
 func (server *WsServer) registerClient(client *Client) {
 	server.notifyClientJoined(client)
@@ -102,17 +116,6 @@ func (client *Client) disconnect() {
 
 	close(client.send)
 	client.conn.Close()
-}
-
-// return new websocket connection
-func newClient(conn *websocket.Conn, wsServer *WsServer, name string) *Client {
-	return &Client{
-		conn:     conn,
-		wsServer: wsServer,
-		rooms:    make(map[*Room]bool),
-		Name:     name,
-		ID:       uuid.New(),
-	}
 }
 
 // Boardcast message to Clients
@@ -157,7 +160,7 @@ func (server *WsServer) notifyClientJoined(client *Client) {
 	}
 
 	// Broadcast to all client
-	client.send <- message.encode()
+	server.broadcastToClients(message.encode())
 }
 
 // Notify client left the room
@@ -169,7 +172,7 @@ func (server *WsServer) notifyClientLeft(client *Client) {
 	}
 
 	// Broadcast to all client
-	client.send <- message.encode()
+	server.broadcastToClients(message.encode())
 }
 
 // ReadPump and WritePump
@@ -239,6 +242,8 @@ func (client *Client) writePump() {
 
 			// Writer write message
 			w.Write(message)
+
+			// Attach queued chat message to the current websocket message
 			n := len(client.send)
 			for i := 0; i < n; i++ {
 				w.Write(newline)

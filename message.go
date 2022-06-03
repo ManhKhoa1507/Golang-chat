@@ -39,6 +39,8 @@ func (message *Message) encode() []byte {
 // Handle new message from client
 func (client *Client) handleNewMessage(jsonMessage []byte) {
 	var message Message
+
+	// Handle error
 	if err := json.Unmarshal(jsonMessage, &message); err != nil {
 		fmt.Println("Error on unmarshal message -> JSON")
 	}

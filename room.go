@@ -7,14 +7,13 @@ import (
 )
 
 type Room struct {
-	// Define Room type struct
 	ID         uuid.UUID `json:"id"`
 	Name       string    `json:"name"`
-	Private    bool      `json:"private"`
 	clients    map[*Client]bool
 	register   chan *Client
 	unregister chan *Client
 	broadcast  chan *Message
+	Private    bool `json:"private"`
 }
 
 const welcomeMessage = "Welcome %s"
@@ -24,11 +23,11 @@ func NewRoom(name string, private bool) *Room {
 	return &Room{
 		ID:         uuid.New(),
 		Name:       name,
-		Private:    private,
 		clients:    make(map[*Client]bool),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		broadcast:  make(chan *Message),
+		Private:    private,
 	}
 }
 
@@ -49,6 +48,45 @@ func (room *Room) RunRoom() {
 			room.broadcastToClientsInRoom(message.encode())
 		}
 	}
+}
+
+// Member interaction
+// Register and Unregister client in room
+// Add client to new room and notify to all member
+func (room *Room) registerClientInRoom(client *Client) {
+	// If client choose public chat room
+	if !room.Private {
+		room.notifyClientJoined(client)
+	}
+
+	room.clients[client] = true
+}
+
+// Remove client from room
+func (room *Room) unregisterClientInRoom(client *Client) {
+	// If room exists remove client from that room
+	if _, ok := room.clients[client]; ok {
+		delete(room.clients, client)
+	}
+}
+
+// List online members
+func (server *WsServer) listOnlineClients(client *Client) {
+	for existingClient := range server.clients {
+		message := &Message{
+			Action: UserJoinedAction,
+			Sender: existingClient,
+		}
+		client.send <- message.encode()
+	}
+}
+
+// Check if client is not yet in the room
+func (client *Client) isInRoom(room *Room) bool {
+	if _, ok := client.rooms[room]; ok {
+		return true
+	}
+	return false
 }
 
 // Notification
@@ -84,46 +122,7 @@ func (room *Room) broadcastToClientsInRoom(message []byte) {
 	}
 }
 
-// Member interaction
-// Register and Unregister client in room
-// Add client to new room and notify to all member
-func (room *Room) registerClientInRoom(client *Client) {
-	// If client choose public chat room
-	if !room.Private {
-		room.notifyClientJoined(client)
-	}
-	room.notifyClientJoined(client)
-	room.clients[client] = true
-}
-
-// Remove client from room
-func (room *Room) unregisterClientInRoom(client *Client) {
-	if _, ok := room.clients[client]; ok {
-		delete(room.clients, client)
-	}
-}
-
-// List online members
-func (server *WsServer) listOnlineClients(client *Client) {
-	for existingClient := range server.clients {
-		message := &Message{
-			Action: UserJoinedAction,
-			Sender: existingClient,
-		}
-		client.send <- message.encode()
-	}
-}
-
-// Check if client is not yet in the room
-func (client *Client) isInRoom(room *Room) bool {
-	if _, ok := client.rooms[room]; ok {
-		return true
-	}
-	return false
-}
-
 // Room interaction
-
 // Return room's ID
 func (room *Room) GetID() string {
 	return room.ID.String()
@@ -161,6 +160,14 @@ func (server *WsServer) findRoomByID(ID string) *Room {
 
 // Create new room chat
 func (server *WsServer) createRoom(name string, private bool) *Room {
+
+	// Handle no name Room
+	if name == "" {
+		fmt.Println("Not such a name")
+		return nil
+	}
+
+	// Make new room
 	room := NewRoom(name, private)
 	go room.RunRoom()
 	server.rooms[room] = true
@@ -184,6 +191,8 @@ func (client *Client) handleLeaveRoomMessage(message Message) {
 	if room == nil {
 		fmt.Println("Room not found")
 	}
+
+	// Delete clients
 	if _, ok := client.rooms[room]; ok {
 		delete(client.rooms, room)
 	}
@@ -216,7 +225,7 @@ func (client *Client) joinRoom(roomName string, sender *Client) {
 
 	// Handle room not found -> Create new room
 	if room == nil {
-		fmt.Println("Create new room")
+		fmt.Println("Create new room : " + roomName)
 		room = client.wsServer.createRoom(roomName, sender != nil)
 	}
 
