@@ -12,16 +12,16 @@ const (
 	JoinRoomAction    = "join-room"
 	LeaveRoomAction   = "leave-room"
 
-	// Define user action
-	UserJoinedAction = "user-join"
-	UserLeftAction   = "user-left"
+	// Define joined action
+	RoomJoinedAction      = "room-joined"
+	JoinRoomPrivateAction = "join-room-private"
 )
 
 // Define message json
 type Message struct {
 	Action  string  `json:"action"`
 	Message string  `json:"message"`
-	Target  string  `json:"target"`
+	Target  *Room   `json:"target"`
 	Sender  *Client `json:"sender"`
 }
 
@@ -50,10 +50,10 @@ func (client *Client) handleNewMessage(jsonMessage []byte) {
 
 	// If action is send message -> send message to specific room
 	case SendMessageAction:
-		roomName := message.Target
+		roomID := message.Target.GetID()
 
 		// Find room to send
-		if room := client.wsServer.findRoomByName(roomName); room != nil {
+		if room := client.wsServer.findRoomByName(roomID); room != nil {
 			room.broadcast <- &message
 		}
 
@@ -64,5 +64,9 @@ func (client *Client) handleNewMessage(jsonMessage []byte) {
 	// If client request to leaves room
 	case LeaveRoomAction:
 		client.handleLeaveRoomMessage(message)
+
+	// If client request joined Private room
+	case JoinRoomPrivateAction:
+		client.handleJoinRoomPrivateMessage(message)
 	}
 }

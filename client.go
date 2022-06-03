@@ -3,10 +3,16 @@ package main
 import (
 	"fmt"
 	"log"
-	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+)
+
+const (
+	// Define user action
+	UserJoinedAction = "user-join"
+	UserLeftAction   = "user-left"
 )
 
 // Create upgrader to hold the buffer size of websocket connection
@@ -27,7 +33,8 @@ type Client struct {
 	wsServer *WsServer
 	send     chan []byte
 	rooms    map[*Room]bool
-	Name     string `json:"name"`
+	Name     string    `json:"name"`
+	ID       uuid.UUID `json:"id"`
 }
 
 // Define some variables
@@ -66,13 +73,11 @@ func (server *WsServer) Run() {
 	}
 }
 
-// Get client name
-func (client *Client) getName() string {
-	return client.Name
-}
-
+// Client interactive
 // Function ro register client -> enable flag true to server.clients[client]
 func (server *WsServer) registerClient(client *Client) {
+	server.notifyClientJoined(client)
+	server.listOnlineClients(client)
 	server.clients[client] = true
 }
 
@@ -80,7 +85,23 @@ func (server *WsServer) registerClient(client *Client) {
 func (server *WsServer) unregisterClient(client *Client) {
 	if _, ok := server.clients[client]; ok {
 		delete(server.clients, client)
+		server.notifyClientLeft(client)
 	}
+}
+
+// Disconnect client
+func (client *Client) disconnect() {
+
+	// add client to unregister and close connection
+	client.wsServer.unregister <- client
+
+	// Unregister client from room
+	for room := range client.rooms {
+		room.unregister <- client
+	}
+
+	close(client.send)
+	client.conn.Close()
 }
 
 // return new websocket connection
@@ -90,9 +111,68 @@ func newClient(conn *websocket.Conn, wsServer *WsServer, name string) *Client {
 		wsServer: wsServer,
 		rooms:    make(map[*Room]bool),
 		Name:     name,
+		ID:       uuid.New(),
 	}
 }
 
+// Boardcast message to Clients
+func (server *WsServer) broadcastToClients(message []byte) {
+
+	// Send message to all client in server.clients
+	for client := range server.clients {
+		client.send <- message
+	}
+}
+
+// Get client information
+// Get client name
+func (client *Client) getName() string {
+	return client.Name
+}
+
+// Get client ID
+func (client *Client) getID() string {
+	return client.ID.String()
+}
+
+// Find client by ID
+func (server *WsServer) findClientByID(ID string) *Client {
+	var foundClient *Client
+	for client := range server.clients {
+		if client.getID() == ID {
+			foundClient = client
+			break
+		}
+	}
+	return foundClient
+}
+
+// Notify memeber joined & left
+// Notify new client joined
+func (server *WsServer) notifyClientJoined(client *Client) {
+	// Create welcome new member message
+	message := &Message{
+		Action: UserJoinedAction,
+		Sender: client,
+	}
+
+	// Broadcast to all client
+	client.send <- message.encode()
+}
+
+// Notify client left the room
+func (server *WsServer) notifyClientLeft(client *Client) {
+	// Create goodbye message
+	message := &Message{
+		Action: UserLeftAction,
+		Sender: client,
+	}
+
+	// Broadcast to all client
+	client.send <- message.encode()
+}
+
+// ReadPump and WritePump
 // Read message and send over the Websocket connection, make endless loop untils client is disconnected
 func (client *Client) readPump() {
 	defer func() {
@@ -120,30 +200,6 @@ func (client *Client) readPump() {
 		// add jsonMessage to broadcast
 		client.handleNewMessage(jsonMessage)
 	}
-}
-
-// Boardcast message to Clients
-func (server *WsServer) broadcastToClients(message []byte) {
-
-	// Send message to all client in server.clients
-	for client := range server.clients {
-		client.send <- message
-	}
-}
-
-// Disconnect client
-func (client *Client) disconnect() {
-
-	// add client to unregister and close connection
-	client.wsServer.unregister <- client
-
-	// Unregister client from room
-	for room := range client.rooms {
-		room.unregister <- client
-	}
-
-	close(client.send)
-	client.conn.Close()
 }
 
 // Goroutine handles sending messages to the connected client
@@ -202,30 +258,4 @@ func (client *Client) writePump() {
 			}
 		}
 	}
-}
-
-func Serverws(wsServer *WsServer, w http.ResponseWriter, r *http.Request) {
-	// Upgrade connection to websocket
-	conn, err := upgrader.Upgrade(w, r, nil)
-
-	// Error handle
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	// Get name from URL query
-	name, ok := r.URL.Query()["name"]
-	if !ok || len(name[0]) < 1 {
-		print("Missing name")
-	}
-	// Create new client and print result
-	client := newClient(conn, wsServer, name[0])
-
-	go client.writePump()
-	go client.readPump()
-
-	wsServer.register <- client
-
-	// fmt.Println("New client, join the server")
-	// fmt.Println(client)
 }

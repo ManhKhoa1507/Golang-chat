@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 )
@@ -27,6 +28,31 @@ func NewWebsocketServer() *WsServer {
 }
 
 var addr = flag.String("localhost", ":8080", "http server address")
+
+// Server websocket
+func Serverws(wsServer *WsServer, w http.ResponseWriter, r *http.Request) {
+	// Upgrade connection to websocket
+	conn, err := upgrader.Upgrade(w, r, nil)
+
+	// Error handle
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	// Get name from URL query
+	name, ok := r.URL.Query()["name"]
+	if !ok || len(name[0]) < 1 {
+		print("Missing name")
+	}
+	// Create new client and print result
+	client := newClient(conn, wsServer, name[0])
+
+	go client.writePump()
+	go client.readPump()
+
+	// register client
+	wsServer.register <- client
+}
 
 func main() {
 	flag.Parse()
