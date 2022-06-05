@@ -236,7 +236,7 @@ func (client *Client) joinRoom(roomName string, sender *Client) {
 	}
 
 	// If there is client in room, register client to room and notify all member
-	if client.isInRoom(room) {
+	if !client.isInRoom(room) {
 		client.rooms[room] = true
 		room.register <- client
 		client.notifyRoomJoined(room, sender)
