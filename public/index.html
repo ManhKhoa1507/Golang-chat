@@ -20,9 +20,10 @@
       crossorigin="anonymous"
     ></script>
 
-    <!-- Load Vue followed by BootstrapVue -->
+    <!-- Load Vue followed by BootstrapVue 
     <script src="https://unpkg.com/vue"></script>
-    <script src="//unpkg.com/bootstrap-vue@latest/dist/bootstrap-vue.min.js"></script>
+    <script src="//unpkg.com/bootstrap-vue@latest/dist/bootstrap-vue.min.js"></script>-->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
   </head>
 
   <body>
@@ -85,8 +86,8 @@
                   class="d-flex justify-content-start mb-4"
                 >
                   <div class="msg_cotainer">
-                    {{message.message}}
                     <span class="msg_name" v-if="message.sender">{{message.sender.name}}</span>
+                    {{message.message}}
                   </div>
                 </div>
               </div>

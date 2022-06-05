@@ -75,5 +75,6 @@ func main() {
 	http.Handle("/", fs)
 
 	// Open connection
+	fmt.Println("Server running at: localhost", *addr)
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }

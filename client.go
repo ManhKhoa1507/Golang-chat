@@ -120,7 +120,7 @@ func (client *Client) disconnect() {
 
 // Boardcast message to Clients
 func (server *WsServer) broadcastToClients(message []byte) {
-
+	fmt.Println("Message: ", message)
 	// Send message to all client in server.clients
 	for client := range server.clients {
 		client.send <- message

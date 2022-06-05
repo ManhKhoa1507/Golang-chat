@@ -55,7 +55,7 @@ func (client *Client) handleNewMessage(jsonMessage []byte) {
 		roomID := message.Target.GetID()
 
 		// Find room to send
-		if room := client.wsServer.findRoomByName(roomID); room != nil {
+		if room := client.wsServer.findRoomByID(roomID); room != nil {
 			room.broadcast <- &message
 		}
 
