@@ -12,14 +12,14 @@ const (
 )
 
 type Room struct {
-	Id      string
+	ID      string
 	Name    string
 	Private bool
 }
 
 // Get room's ID
 func (room *Room) GetID() string {
-	return room.Id
+	return room.ID
 }
 
 // Get room's name
@@ -58,7 +58,7 @@ func (repo *RoomRepository) findRoomByName(name string) models.Room {
 	var room Room
 
 	// Handle error
-	if err := row.Scan(&room.Id, &room.Name, &room.Private); err != nil {
+	if err := row.Scan(&room.ID, &room.Name, &room.Private); err != nil {
 		// Room not found
 		if err == sql.ErrNoRows {
 			fmt.Println("Room not found")
