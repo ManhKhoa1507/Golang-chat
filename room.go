@@ -1,6 +1,7 @@
 package main
 
 import (
+	"chat/models"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -72,10 +73,10 @@ func (room *Room) unregisterClientInRoom(client *Client) {
 
 // List online members
 func (server *WsServer) listOnlineClients(client *Client) {
-	for existingClient := range server.clients {
+	for _, user := range server.users {
 		message := &Message{
 			Action: UserJoinedAction,
-			Sender: existingClient,
+			Sender: user,
 		}
 		client.send <- message.encode()
 	}
@@ -96,7 +97,7 @@ func (room *Room) notifyClientJoined(client *Client) {
 	message := &Message{
 		Action:  SendMessageAction,
 		Target:  room,
-		Message: fmt.Sprintf(welcomeMessage, client.getName()),
+		Message: fmt.Sprintf(welcomeMessage, client.GetName()),
 	}
 
 	// Broadcast to all client in the room
@@ -104,7 +105,7 @@ func (room *Room) notifyClientJoined(client *Client) {
 }
 
 // Notify client of the new room
-func (client *Client) notifyRoomJoined(room *Room, sender *Client) {
+func (client *Client) notifyRoomJoined(room *Room, sender models.User) {
 	message := Message{
 		Action: RoomJoinedAction,
 		Target: room,
@@ -133,8 +134,13 @@ func (room *Room) GetName() string {
 	return room.Name
 }
 
+// Return private room or not
+func (room *Room) GetPrivate() bool {
+	return room.Private
+}
+
 // Find room's name in all rooms created
-func (server *WsServer) findRoomByName(name string) *Room {
+func (server *WsServer) FindRoomByName(name string) *Room {
 	// Create loop to find all name = room[name]
 	var foundRoom *Room
 	for room := range server.rooms {
@@ -143,7 +149,32 @@ func (server *WsServer) findRoomByName(name string) *Room {
 			break
 		}
 	}
+
+	// If there is no room, try to create it from repo
+	if foundRoom == nil {
+		foundRoom = server.runRoomFormRepository(name)
+	}
+
 	return foundRoom
+}
+
+// Run room from repository
+func (server *WsServer) runRoomFormRepository(name string) *Room {
+	var room *Room
+
+	// Find room
+	dbRoom := server.roomRepository.FindRoomByName(name)
+
+	// If not exists create new room
+	if dbRoom != nil {
+		room = NewRoom(dbRoom.GetName(), dbRoom.GetPrivate())
+		room.ID, _ = uuid.Parse(dbRoom.GetID())
+
+		go room.RunRoom()
+		server.rooms[room] = true
+	}
+
+	return room
 }
 
 // Find room's ID in all rooms created
@@ -169,8 +200,13 @@ func (server *WsServer) createRoom(name string, private bool) *Room {
 
 	// Make new room
 	room := NewRoom(name, private)
+
+	// Add room to repo
+	server.roomRepository.AddRoom(room)
+
 	go room.RunRoom()
 	server.rooms[room] = true
+
 	return room
 }
 
@@ -220,8 +256,8 @@ func (client *Client) handleJoinRoomPrivateMessage(message Message) {
 }
 
 // Handle join private room
-func (client *Client) joinRoom(roomName string, sender *Client) {
-	room := client.wsServer.findRoomByName(roomName)
+func (client *Client) joinRoom(roomName string, sender models.User) {
+	room := client.wsServer.FindRoomByName(roomName)
 
 	// Handle room not found -> Create new room
 	if room == nil {

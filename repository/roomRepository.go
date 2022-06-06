@@ -52,7 +52,7 @@ func (repo *RoomRepository) AddRoom(room models.Room) {
 	HandleError(err, "Insert value to Room")
 }
 
-func (repo *RoomRepository) findRoomByName(name string) models.Room {
+func (repo *RoomRepository) FindRoomByName(name string) models.Room {
 	row := repo.Db.QueryRow(FindRoom, name)
 
 	var room Room

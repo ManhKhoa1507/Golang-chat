@@ -90,6 +90,10 @@ func newClient(conn *websocket.Conn, wsServer *WsServer, name string) *Client {
 
 // Function ro register client -> enable flag true to server.clients[client]
 func (server *WsServer) registerClient(client *Client) {
+	// Add user to the repo
+	server.userRepository.AddUser(client)
+
+	// Existing action
 	server.notifyClientJoined(client)
 	server.listOnlineClients(client)
 	server.clients[client] = true
@@ -99,7 +103,9 @@ func (server *WsServer) registerClient(client *Client) {
 func (server *WsServer) unregisterClient(client *Client) {
 	if _, ok := server.clients[client]; ok {
 		delete(server.clients, client)
-		server.notifyClientLeft(client)
+
+		server.userRepository.RemoveUser(client)
+
 	}
 }
 
@@ -129,12 +135,12 @@ func (server *WsServer) broadcastToClients(message []byte) {
 
 // Get client information
 // Get client name
-func (client *Client) getName() string {
+func (client *Client) GetName() string {
 	return client.Name
 }
 
 // Get client ID
-func (client *Client) getID() string {
+func (client *Client) GetID() string {
 	return client.ID.String()
 }
 
@@ -142,7 +148,7 @@ func (client *Client) getID() string {
 func (server *WsServer) findClientByID(ID string) *Client {
 	var foundClient *Client
 	for client := range server.clients {
-		if client.getID() == ID {
+		if client.GetID() == ID {
 			foundClient = client
 			break
 		}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"chat/models"
 	"encoding/json"
 	"fmt"
 )
@@ -19,10 +20,10 @@ const (
 
 // Define message json
 type Message struct {
-	Action  string  `json:"action"`
-	Message string  `json:"message"`
-	Target  *Room   `json:"target"`
-	Sender  *Client `json:"sender"`
+	Action  string      `json:"action"`
+	Message string      `json:"message"`
+	Target  *Room       `json:"target"`
+	Sender  models.User `json:"sender"`
 }
 
 // Encode message to json format
@@ -34,6 +35,22 @@ func (message *Message) encode() []byte {
 		fmt.Println("Error")
 	}
 	return json
+}
+
+// UnmarshalJSON to create client instance for sender
+func (message *Message) UnmarshalJSON(data []byte) error {
+	type Alias Message
+	msg := &struct {
+		Sender Client `json:"sender"`
+		*Alias
+	}{
+		Alias: (*Alias)(message),
+	}
+	if err := json.Unmarshal(data, &msg); err != nil {
+		return err
+	}
+	message.Sender = &msg.Sender
+	return nil
 }
 
 // Handle new message from client

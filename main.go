@@ -2,6 +2,7 @@ package main
 
 import (
 	"chat/config"
+	"chat/repository"
 	"flag"
 	"fmt"
 	"log"
@@ -10,9 +11,12 @@ import (
 
 func main() {
 	flag.Parse()
+	// Create database
+	db := config.InitDB()
+	defer db.Close()
 
 	// upgrade connection to websocket
-	wsServer := NewWebsocketServer()
+	wsServer := NewWebsocketServer(&repository.RoomRepository{Db: db}, &repository.UserRepository{Db: db})
 	go wsServer.Run()
 
 	// Handle request to this part
@@ -27,8 +31,4 @@ func main() {
 	// Open connection
 	fmt.Println("Server running at: localhost", *addr)
 	log.Fatal(http.ListenAndServe(*addr, nil))
-
-	// Create database
-	db := config.InitDB()
-	defer db.Close()
 }

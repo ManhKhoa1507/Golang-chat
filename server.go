@@ -1,6 +1,7 @@
 package main
 
 import (
+	"chat/models"
 	"flag"
 	"fmt"
 	"net/http"
@@ -8,22 +9,32 @@ import (
 
 // Declare WsServer struct
 type WsServer struct {
-	clients    map[*Client]bool
-	register   chan *Client
-	unregister chan *Client
-	broadcast  chan []byte
-	rooms      map[*Room]bool
+	clients        map[*Client]bool
+	register       chan *Client
+	unregister     chan *Client
+	broadcast      chan []byte
+	rooms          map[*Room]bool
+	users          []models.User
+	roomRepository models.RoomRepository
+	userRepository models.UserRepository
 }
 
 // Create new WsServer type
-func NewWebsocketServer() *WsServer {
-	return &WsServer{
-		clients:    make(map[*Client]bool),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		broadcast:  make(chan []byte),
-		rooms:      make(map[*Room]bool),
+func NewWebsocketServer(roomRepository models.RoomRepository, userRepository models.UserRepository) *WsServer {
+	wsServer := &WsServer{
+		clients:        make(map[*Client]bool),
+		register:       make(chan *Client),
+		unregister:     make(chan *Client),
+		broadcast:      make(chan []byte),
+		rooms:          make(map[*Room]bool),
+		roomRepository: roomRepository,
+		userRepository: userRepository,
 	}
+
+	// Add users from database to server
+	wsServer.users = userRepository.GetAllUsers()
+
+	return wsServer
 }
 
 var addr = flag.String("localhost", ":8080", "http server address")

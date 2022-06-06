@@ -10,5 +10,5 @@ type Room interface {
 
 type RoomRepository interface {
 	AddRoom(room Room)
-	findRoomByName(name string) Room
+	FindRoomByName(name string) Room
 }
