@@ -3,14 +3,16 @@ package repository
 import (
 	"chat/models"
 	"database/sql"
+	"fmt"
+	"log"
 )
 
 const (
 	// Defind SQL commnad
-	InsertUser      = "INSERT INTO user(id, name) values (?,?)"
+	InsertUser      = "INSERT INTO user (id, name) values (?,?)"
 	DeleteUser      = "DELETE FROM user WHERE id = ?"
 	FindUserByIDSQL = "SELECT id,name FROM user WHERE id = ? LIMIT 1"
-	GetAllUsersList = "SELETE id,name FROM user"
+	GetAllUsersList = "SELECT id, name FROM user"
 )
 
 type User struct {
@@ -34,15 +36,17 @@ type UserRepository struct {
 
 // Add user value to user table
 func (repo *UserRepository) AddUser(user models.User) {
-	stmt, err := repo.Db.Prepare(InsertUser)
+	stmt, err := repo.Db.Prepare("INSERT INTO user (id, name) values (?,?)")
 	_, err = stmt.Exec(user.GetID(), user.GetName())
 
-	HandleError(err, "Values to User table")
+	if err != nil {
+		fmt.Println("Error insert value to user table")
+	}
 }
 
 // Remove user
 func (repo *UserRepository) RemoveUser(user models.User) {
-	stmt, err := repo.Db.Prepare(DeleteUser)
+	stmt, err := repo.Db.Prepare("DELETE FROM user WHERE id = ?")
 	_, err = stmt.Exec(user.GetID())
 
 	HandleError(err, "Delete User table")
@@ -50,7 +54,7 @@ func (repo *UserRepository) RemoveUser(user models.User) {
 
 // Find user by ID
 func (repo *UserRepository) FindUserByID(ID string) models.User {
-	row := repo.Db.QueryRow(FindUserByIDSQL, ID)
+	row := repo.Db.QueryRow("SELECT id, name FROM user WHERE id = ? LIMIT 1", ID)
 
 	var user User
 
@@ -66,14 +70,18 @@ func (repo *UserRepository) FindUserByID(ID string) models.User {
 
 // Get all user in database
 func (repo *UserRepository) GetAllUsers() []models.User {
-	rows, err := repo.Db.Query(GetAllUsersList)
+	rows, err := repo.Db.Query("SELECT id, name FROM user")
+	// rows, err := repo.Db.Prepare(GetAllUsersList)
+	// rows.Exec()
+	// // Handle error
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// Handle error
-	HandleError(err, "List all user")
+	defer rows.Close()
 
 	// Closr rows
 	var users []models.User
-	defer rows.Close()
 
 	// Scan users and append it into list
 	for rows.Next() {

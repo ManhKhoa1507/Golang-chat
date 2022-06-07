@@ -8,22 +8,8 @@ import (
 )
 
 const (
-
-	// Define create table action
-	CreateRoomTable = `
-	CREATE TABLE IF NOT EXISTS room (
-		id VARCHAR (25) NOT NULL PRIMARY KEY,
-		name VARCHAR(25) NOT NULL,
-		private TINYINT NULL
-	);
-	`
-
-	CreateUserTable = `
-	CREATE TABLE IF NOT EXISTS user(
-		id VARCHAR(25) NOT NULL PRIMARY KEY,
-		name VARCHAR(25) NOT NULL,
-	);
-	`
+	createRoom = "CREATE TABLE IF NOT EXISTS room (id VARCHAR(255) NOT NULL PRIMARY KEY, name VARCHAR(255) NOT NULL, private TINYINT NULL);"
+	createUser = "CREATE TABLE IF NOT EXISTS user (id VARCHAR(25) NOT NULL PRIMARY KEY, name VARCHAR(25) NOT NULL);"
 )
 
 // Init the databse
@@ -39,13 +25,19 @@ func InitDB() *sql.DB {
 	// Create database by using MySQl
 
 	// Create database
-	_, err = db.Exec(CreateRoomTable)
-
+	createTableRoomQuery, err := db.Prepare(createRoom)
 	// Handle error
 	if err != nil {
 		fmt.Println("Error when creating table room")
 	}
+	createTableRoomQuery.Exec()
 
-	_, err = db.Exec(CreateUserTable)
+	// Create database
+	createTableUserQuery, err := db.Prepare(createUser)
+	// Handle error
+	if err != nil {
+		fmt.Println("Error when creating table room")
+	}
+	createTableUserQuery.Exec()
 	return db
 }

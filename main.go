@@ -3,14 +3,24 @@ package main
 import (
 	"chat/config"
 	"chat/repository"
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 )
 
+// Handle cancle signal for go routine
+var (
+	ctx  = context.Background()
+	addr = flag.String("addr", ":8080", "http server addres")
+)
+
 func main() {
 	flag.Parse()
+	// Create Redis
+	config.CreateRedisClient()
+
 	// Create database
 	db := config.InitDB()
 	defer db.Close()

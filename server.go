@@ -1,11 +1,14 @@
 package main
 
 import (
+	"chat/config"
 	"chat/models"
-	"flag"
+	"encoding/json"
 	"fmt"
 	"net/http"
 )
+
+const PubSubGeneralChannel = "general"
 
 // Declare WsServer struct
 type WsServer struct {
@@ -25,7 +28,6 @@ func NewWebsocketServer(roomRepository models.RoomRepository, userRepository mod
 		clients:        make(map[*Client]bool),
 		register:       make(chan *Client),
 		unregister:     make(chan *Client),
-		broadcast:      make(chan []byte),
 		rooms:          make(map[*Room]bool),
 		roomRepository: roomRepository,
 		userRepository: userRepository,
@@ -36,8 +38,6 @@ func NewWebsocketServer(roomRepository models.RoomRepository, userRepository mod
 
 	return wsServer
 }
-
-var addr = flag.String("localhost", ":8080", "http server address")
 
 // Server websocket
 func ServerWs(wsServer *WsServer, w http.ResponseWriter, r *http.Request) {
@@ -66,4 +66,59 @@ func ServerWs(wsServer *WsServer, w http.ResponseWriter, r *http.Request) {
 
 	// register client
 	wsServer.register <- client
+}
+
+// Redis pub/sub function
+// Publish client joined the repo
+func (server *WsServer) publishClientJoined(client *Client) {
+	// Create Joined message
+	message := &Message{
+		Action: UserJoinedAction,
+		Sender: client,
+	}
+
+	if err := config.Redis.Publish(ctx, PubSubGeneralChannel, message.encode()).Err(); err != nil {
+		fmt.Println("Error when publish client joined")
+	}
+}
+
+// Publish client left the repo
+func (server *WsServer) publishClientLeft(client *Client) {
+	// Create left message
+	message := &Message{
+		Action: UserLeftAction,
+		Sender: client,
+	}
+
+	if err := config.Redis.Publish(ctx, PubSubGeneralChannel, message.encode()).Err(); err != nil {
+		fmt.Println("Error when publish client left")
+	}
+}
+
+// Listen to pub/sub general channel
+func (server *WsServer) listenPubSubChannel() {
+	pubsub := config.Redis.Subscribe(ctx, PubSubGeneralChannel)
+	ch := pubsub.Channel()
+
+	// Change to json format
+	for msg := range ch {
+		var message Message
+		// Handle error
+		if err := json.Unmarshal([]byte(msg.Payload), &message); err != nil {
+			fmt.Println("Error when change message -> json format")
+			return
+		}
+
+		// Actions
+		switch message.Action {
+		case UserJoinedAction:
+			server.handleUserJoined(message)
+
+		case UserLeftAction:
+			server.handleUserLeft(message)
+
+		case JoinRoomPrivateAction:
+			server.handleUserJoinPrivate(message)
+		}
+	}
 }

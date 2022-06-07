@@ -55,6 +55,8 @@ const (
 
 // Run client
 func (server *WsServer) Run() {
+	go server.listenPubSubChannel()
+
 	// Create endless loop to listen
 	for {
 		select {
@@ -66,10 +68,6 @@ func (server *WsServer) Run() {
 		// Unregister client
 		case client := <-server.unregister:
 			server.unregisterClient(client)
-
-		// Broadcast message
-		case message := <-server.broadcast:
-			server.broadcastToClients(message)
 		}
 	}
 }
@@ -93,8 +91,11 @@ func (server *WsServer) registerClient(client *Client) {
 	// Add user to the repo
 	server.userRepository.AddUser(client)
 
+	// Publish user in PubSub
+	server.publishClientJoined(client)
+
 	// Existing action
-	server.notifyClientJoined(client)
+	// server.notifyClientJoined(client)
 	server.listOnlineClients(client)
 	server.clients[client] = true
 }
@@ -104,8 +105,11 @@ func (server *WsServer) unregisterClient(client *Client) {
 	if _, ok := server.clients[client]; ok {
 		delete(server.clients, client)
 
+		// Remove user from repo
 		server.userRepository.RemoveUser(client)
 
+		// Publish user left in PubSub
+		server.publishClientLeft(client)
 	}
 }
 
@@ -126,7 +130,6 @@ func (client *Client) disconnect() {
 
 // Boardcast message to Clients
 func (server *WsServer) broadcastToClients(message []byte) {
-	fmt.Println("Message: ", message)
 	// Send message to all client in server.clients
 	for client := range server.clients {
 		client.send <- message

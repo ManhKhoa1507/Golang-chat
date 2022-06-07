@@ -1,6 +1,7 @@
 package main
 
 import (
+	"chat/config"
 	"chat/models"
 	"fmt"
 
@@ -33,6 +34,8 @@ func NewRoom(name string, private bool) *Room {
 }
 
 func (room *Room) RunRoom() {
+	go room.subscribeRoomMessage()
+
 	for {
 		select {
 
@@ -46,7 +49,7 @@ func (room *Room) RunRoom() {
 
 		// Send boardcast message to all member in room which in json format
 		case message := <-room.broadcast:
-			room.broadcastToClientsInRoom(message.encode())
+			room.publishRoomMessage(message.encode())
 		}
 	}
 }
@@ -82,12 +85,55 @@ func (server *WsServer) listOnlineClients(client *Client) {
 	}
 }
 
+// Find User by ID
+func (server *WsServer) findUserByID(ID string) models.User {
+
+	// Find ID == client.GetID()
+	var foundUser models.User
+	for _, client := range server.users {
+		if client.GetID() == ID {
+			foundUser = client
+			break
+		}
+	}
+
+	return foundUser
+}
+
 // Check if client is not yet in the room
 func (client *Client) isInRoom(room *Room) bool {
 	if _, ok := client.rooms[room]; ok {
 		return true
 	}
 	return false
+}
+
+// Handle user joined
+func (server *WsServer) handleUserJoined(message Message) {
+	// Add user to the splice
+	server.users = append(server.users, message.Sender)
+	server.broadcastToClients(message.encode())
+}
+
+// Handle user left
+func (server *WsServer) handleUserLeft(message Message) {
+	for i, user := range server.users {
+		if user.GetID() == message.Sender.GetID() {
+			server.users[i] = server.users[len(server.users)-1]
+			server.users = server.users[:len(server.users)-1]
+		}
+	}
+
+	server.broadcastToClients(message.encode())
+}
+
+// handle join private room
+func (server *WsServer) handleUserJoinPrivate(message Message) {
+	// Find client for given user, if found add the user to the room.
+	targetClient := server.findClientByID(message.Message)
+	if targetClient != nil {
+		targetClient.joinRoom(message.Target.GetName(), message.Sender)
+	}
 }
 
 // Notification
@@ -101,7 +147,7 @@ func (room *Room) notifyClientJoined(client *Client) {
 	}
 
 	// Broadcast to all client in the room
-	room.broadcastToClientsInRoom(message.encode())
+	room.publishRoomMessage(message.encode())
 }
 
 // Notify client of the new room
@@ -240,7 +286,7 @@ func (client *Client) handleLeaveRoomMessage(message Message) {
 // 	Handle join private room message
 func (client *Client) handleJoinRoomPrivateMessage(message Message) {
 	// Find requested client
-	target := client.wsServer.findClientByID(message.Message)
+	target := client.wsServer.findUserByID(message.Message)
 
 	// Handle client not found
 	if target == nil {
@@ -250,13 +296,17 @@ func (client *Client) handleJoinRoomPrivateMessage(message Message) {
 
 	roomName := message.Message + client.ID.String()
 
-	// Create room for 2 clients
-	client.joinRoom(roomName, target)
-	target.joinRoom(roomName, client)
+	// join room
+	joinedRoom := client.joinRoom(roomName, target)
+
+	// Let target client joined with invited request
+	if joinedRoom != nil {
+		client.inviteTargetUser(target, joinedRoom)
+	}
 }
 
 // Handle join private room
-func (client *Client) joinRoom(roomName string, sender models.User) {
+func (client *Client) joinRoom(roomName string, sender models.User) *Room {
 	room := client.wsServer.FindRoomByName(roomName)
 
 	// Handle room not found -> Create new room
@@ -268,7 +318,7 @@ func (client *Client) joinRoom(roomName string, sender models.User) {
 	// Don't allow to join private rooms through public room
 	if sender == nil && room.Private {
 		fmt.Println("Not allow to join private room through public room")
-		return
+		return nil
 	}
 
 	// If there is client in room, register client to room and notify all member
@@ -276,5 +326,41 @@ func (client *Client) joinRoom(roomName string, sender models.User) {
 		client.rooms[room] = true
 		room.register <- client
 		client.notifyRoomJoined(room, sender)
+	}
+
+	return room
+}
+
+// Send out invite message over pub/sub channel
+func (client *Client) inviteTargetUser(target models.User, room *Room) {
+	invitedMessage := &Message{
+		Action:  JoinRoomPrivateAction,
+		Message: target.GetID(),
+		Target:  room,
+		Sender:  client,
+	}
+
+	if err := config.Redis.Publish(ctx, PubSubGeneralChannel, invitedMessage.encode()).Err(); err != nil {
+		fmt.Println("Error when publish channel")
+	}
+}
+
+// Publish to room message
+func (room *Room) publishRoomMessage(message []byte) {
+	err := config.Redis.Publish(ctx, room.GetName(), message).Err()
+
+	// Handle error
+	if err != nil {
+		fmt.Println("Publish room error")
+	}
+}
+
+// Subscribe to room message
+func (room *Room) subscribeRoomMessage() {
+	pubsub := config.Redis.Subscribe(ctx, room.GetName())
+	ch := pubsub.Channel()
+
+	for msg := range ch {
+		room.broadcastToClientsInRoom([]byte(msg.Payload))
 	}
 }
