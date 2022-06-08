@@ -230,6 +230,7 @@ func (client *Client) writePump() {
 	for {
 		select {
 
+		// Set write deadline: if timeout corrupt
 		case message, ok := <-client.send:
 			client.conn.SetWriteDeadline(time.Now().Add(pongWait))
 
@@ -239,7 +240,7 @@ func (client *Client) writePump() {
 				return
 			}
 
-			// NextWriter return a writer for next message to send
+			// NextWriter return a writer for next message to send, create writer
 			// return writer w
 			w, err := client.conn.NextWriter(websocket.TextMessage)
 

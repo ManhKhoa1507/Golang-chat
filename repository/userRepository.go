@@ -36,7 +36,7 @@ type UserRepository struct {
 
 // Add user value to user table
 func (repo *UserRepository) AddUser(user models.User) {
-	stmt, err := repo.Db.Prepare("INSERT INTO user (id, name) values (?,?)")
+	stmt, err := repo.Db.Prepare(InsertUser)
 	_, err = stmt.Exec(user.GetID(), user.GetName())
 
 	if err != nil {
@@ -46,7 +46,7 @@ func (repo *UserRepository) AddUser(user models.User) {
 
 // Remove user
 func (repo *UserRepository) RemoveUser(user models.User) {
-	stmt, err := repo.Db.Prepare("DELETE FROM user WHERE id = ?")
+	stmt, err := repo.Db.Prepare(DeleteUser)
 	_, err = stmt.Exec(user.GetID())
 
 	HandleError(err, "Delete User table")
@@ -54,7 +54,7 @@ func (repo *UserRepository) RemoveUser(user models.User) {
 
 // Find user by ID
 func (repo *UserRepository) FindUserByID(ID string) models.User {
-	row := repo.Db.QueryRow("SELECT id, name FROM user WHERE id = ? LIMIT 1", ID)
+	row := repo.Db.QueryRow(FindUserByIDSQL)
 
 	var user User
 
@@ -70,7 +70,7 @@ func (repo *UserRepository) FindUserByID(ID string) models.User {
 
 // Get all user in database
 func (repo *UserRepository) GetAllUsers() []models.User {
-	rows, err := repo.Db.Query("SELECT id, name FROM user")
+	rows, err := repo.Db.Query(GetAllUsersList)
 	// rows, err := repo.Db.Prepare(GetAllUsersList)
 	// rows.Exec()
 	// // Handle error
