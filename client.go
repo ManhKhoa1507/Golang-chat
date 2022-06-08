@@ -220,6 +220,7 @@ func (client *Client) readPump() {
 // If multiple message, combined in one write
 func (client *Client) writePump() {
 	// Use NewTicker to viewing time
+	// Make connection alive by using ICMP
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
